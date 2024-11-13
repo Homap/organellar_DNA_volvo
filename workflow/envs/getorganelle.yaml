@@ -1,0 +1,13 @@
+name: getorganelle_env
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - getorganelle=1.7.7.1
+  - requests>=2.25,<2.26  # flexible range for requests
+  - numpy>=1.20,<1.22
+  - zlib>=1.2
+  - urllib3>=1.21.1,<1.27
+  - python=3.9
+

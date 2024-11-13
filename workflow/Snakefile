@@ -1,0 +1,151 @@
+__author__ = "Homa Papoli Yazdi"
+__email__ = "homa.papoli_yazdi@biol.lu.se"
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------#
+configfile: "config/config.yaml"
+#--------------------------------------------------------------------------------------------------------------------------------------------------#
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------#
+#--------------------Import Python modules---------------------------------------------------------------------------------------------------------#
+#--------------------------------------------------------------------------------------------------------------------------------------------------#
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+#--------------------------------------------------------------------------------------------------------------------------------------------------#
+#--------------------Reading design table----------------------------------------------------------------------------------------------------------#
+#--------------------------------------------------------------------------------------------------------------------------------------------------#
+design_table = pd.read_table(config["sample_table"], sep="\t")
+fastq_name = design_table.Fastq_Name
+
+rule all:
+    input:
+        organelle_DNA = expand(["results/cpDNA_get_organelle/{sample}_cpDNA/{sample}.getOrgComplete.txt", 
+        "results/mtDNA_get_organelle/{sample}_mtDNA/{sample}.getOrgComplete.txt"],sample=fastq_name)
+
+#----------------------------------------------------------------------------------------
+# Assembly of organellar genomes
+#----------------------------------------------------------------------------------------
+# Start with unclassified reads given by Kraken2
+# Also filtered by Fastp and bbtols look in:
+# /proj/snic2022-23-81/algae_phylo_volv/data/soft_links/code/filtering_data.md
+# /proj/snic2022-23-81/algae_phylo_volv/data/soft_links/code/kraken2_run.sh 
+#----------------------------------------------------------------------------------------
+# Assemble cpDNA
+#----------------------------------------------------------------------------------------
+rule cpDNA_assembly:
+    input:
+        fastq1="data/fastq/{sample}.ucseqs_1.fastq.gz",
+        fastq2="data/fastq/{sample}.ucseqs_2.fastq.gz"
+    output:
+        ckp="results/cpDNA_get_organelle/{sample}_cpDNA/{sample}.getOrgComplete.txt"
+    params:
+        cpDNA_assembly_outdir="results/cpDNA_get_organelle/{sample}_cpDNA",
+        cpDNA_ref="data/cpDNA_genome/cpDNA_chlorophyceae_complete_genome.fasta",
+        getorg_label="data/get_organelle_label_dataset/chlorophyceae_cp.label.fasta"
+    resources:
+        threads = 16,
+        runtime = "48h",
+        mem_mb = 96000
+    conda:
+        "envs/getorganelle.yaml"
+    shell:
+        """
+        get_organelle_from_reads.py -t 16 \
+        -s {params.cpDNA_ref} \
+        --genes {params.getorg_label} \
+        -1 {input.fastq1} \
+        -2 {input.fastq2} \
+        -o {params.cpDNA_assembly_outdir} \
+        -R 30 \
+        -k 21,45,65,85,105 \
+        -F other_pt \
+        -t {resources.threads} \
+        --overwrite
+        touch {output.ckp}
+        """
+#----------------------------------------------------------------------------------------
+# Assemble mtDNA
+#----------------------------------------------------------------------------------------
+rule mtDNA_assembly:
+    input:
+        fastq1="data/fastq/{sample}.ucseqs_1.fastq.gz",
+        fastq2="data/fastq/{sample}.ucseqs_2.fastq.gz"
+    output:
+        ckp="results/mtDNA_get_organelle/{sample}_mtDNA/{sample}.getOrgComplete.txt"
+    params:
+        mtDNA_assembly_outdir="results/mtDNA_get_organelle/{sample}_mtDNA",
+        mtDNA_ref="data/mtDNA_genome/mtDNA_chlorophyceae_complete_genome.fasta",
+        getorg_label="data/get_organelle_label_dataset/chlorophyceae_mt.label.fasta"
+    resources:
+        threads = 16, 
+        mem_mb = 96000,
+        runtime = "48h"
+    conda:
+        "envs/getorganelle.yaml"
+    shell:
+        """
+        get_organelle_from_reads.py -t 16 \
+        -s {params.mtDNA_ref} \
+        --genes {params.getorg_label} \
+        -1 {input.fastq1} \
+        -2 {input.fastq2} \
+        -o {params.mtDNA_assembly_outdir} \
+        -R 30 \
+        -k 21,45,65,85,105 \
+        -F embplant_mt \
+        -t {resources.threads} \
+        --overwrite
+        touch {output.ckp}
+        """
+
+# For incomplete scaffolds - join_spades_fastg_by_blast.py
+#----------------------------------------------------------------------------------------
+# Annotation of cpDNA in GeSeq
+#----------------------------------------------------------------------------------------
+# This step is done manually in https://chlorobox.mpimp-golm.mpg.de/geseq.html
+# Description of parameters and steps for reproducibility
+#----------------------------------------------------------------------------------------
+# Collect all annotations and change fasta header tp gene name and sample name
+# Concatenate all samples per gene
+# Concatenate all genes for genomes from the NCBI
+# Edit sequence names. Keep original sample IDs since it is easier to track.
+
+
+
+#----------------------------------------------------------------------------------------
+# Annotation of mtDNA in GeSeq
+#----------------------------------------------------------------------------------------
+# This step is done manually in https://chlorobox.mpimp-golm.mpg.de/geseq.html
+# Description of parameters and steps for reproducibility
+#----------------------------------------------------------------------------------------
+# Collect all annotations and change fasta header tp gene name and sample name
+# Concatenate all samples per gene
+# Concatenate all genes for genomes from the NCBI
+# Edit sequence names. Keep original sample IDs since it is easier to track.
+
+# ASTGUBGB	GCA_021605115
+# CHLREIGB	GCA_026108075
+# CHLSCHGB	GCA_016834595
+# EDADEBGB	GCA_001662405
+# GONPECGB	GCA_001584585
+# TETSOCGB	GCA_002891735
+# VOLAFRGB	GCA_019650175
+# VOLCARGB	GCA_000143455
+# VOLRETGB	GCA_019650235
+# EUDSPGB	GCA_003117195
+# CHLVULGB	GCA_023343905
+# DUNSALGB	GCA_002284615
+# YAMUNIGB	GCA_003116995
+# MICGLO_Lie01	S104_merged #P28566_104
+# CHLTYP_NIVA21	P29912_105 #P28566_105
+# CHLISA_Bae13	S115_merged #P28566_115
+# rule genebank_CDS:
+#     input:
+#         gb_cpDNA="results/geseq_cpDNA_annotation/"
+#     output:
+#     conda:
+#         "envs/getorganelle.yaml"
+#     shell:
+#         """
+#         get_annotated_regions_from_gb.py 
+#         """
