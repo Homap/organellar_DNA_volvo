@@ -3,6 +3,7 @@ __email__ = "homa.papoli_yazdi@biol.lu.se"
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
 configfile: "config/config.yaml"
+localrules: copy_all_files, ragtag_cpDNA_scaf_rename
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
@@ -11,6 +12,8 @@ configfile: "config/config.yaml"
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+from Bio import SeqIO
+import shutil
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
 #--------------------Reading design table----------------------------------------------------------------------------------------------------------#
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
@@ -20,8 +23,11 @@ fastq_name = design_table.Fastq_Name
 rule all:
     input:
         organelle_DNA = expand(["results/cpDNA_get_organelle/{sample}_cpDNA/{sample}.getOrgComplete.txt", 
-        "results/mtDNA_get_organelle/{sample}_mtDNA/{sample}.getOrgComplete.txt"],sample=fastq_name)
-
+        "results/cpDNA_ragtag/{sample}_cpDNA/{sample}_cpDNA.ragtag.scaf.fasta",
+        "results/cpDNA_ragtag/{sample}_cpDNA/{sample}_renamed_cpDNA.ragtag.scaf.fasta"
+        ],sample=fastq_name)
+#"results/mtDNA_get_organelle/{sample}_mtDNA/{sample}.getOrgComplete.txt"
+# "results/mtDNA_get_organelle/P29912_104_S12_L001_mtDNA/P29912_104_S12_L001.getOrgComplete.txt"
 #----------------------------------------------------------------------------------------
 # Assembly of organellar genomes
 #----------------------------------------------------------------------------------------
@@ -50,7 +56,7 @@ rule cpDNA_assembly:
         "envs/getorganelle.yaml"
     shell:
         """
-        get_organelle_from_reads.py -t 16 \
+        get_organelle_from_reads.py \
         -s {params.cpDNA_ref} \
         --genes {params.getorg_label} \
         -1 {input.fastq1} \
@@ -66,39 +72,190 @@ rule cpDNA_assembly:
 #----------------------------------------------------------------------------------------
 # Assemble mtDNA
 #----------------------------------------------------------------------------------------
-rule mtDNA_assembly:
-    input:
-        fastq1="data/fastq/{sample}.ucseqs_1.fastq.gz",
-        fastq2="data/fastq/{sample}.ucseqs_2.fastq.gz"
+# rule mtDNA_assembly:
+#     input:
+#         fastq1="data/fastq/{sample}.ucseqs_1.fastq.gz",
+#         fastq2="data/fastq/{sample}.ucseqs_2.fastq.gz"
+#     output:
+#         ckp="results/mtDNA_get_organelle/{sample}_mtDNA/{sample}.getOrgComplete.txt"
+#     params:
+#         mtDNA_assembly_outdir="results/mtDNA_get_organelle/{sample}_mtDNA",
+#         mtDNA_ref="data/mtDNA_genome/mtDNA_chlorophyceae_complete_genome.fasta",
+#         getorg_label="data/get_organelle_label_dataset/chlorophyceae_mt.label.fasta"
+#     resources:
+#         threads = 16, 
+#         mem_mb = 96000,
+#         runtime = "48h"
+#     conda:
+#         "envs/getorganelle.yaml"
+#     shell:
+#         """
+#         get_organelle_from_reads.py \
+#         -s {params.mtDNA_ref} \
+#         --genes {params.getorg_label} \
+#         -1 {input.fastq1} \
+#         -2 {input.fastq2} \
+#         -o {params.mtDNA_assembly_outdir} \
+#         -R 30 \
+#         -k 21,45,65,85,105 \
+#         -F embplant_mt \
+#         -t {resources.threads} \
+#         --overwrite
+#         touch {output.ckp}
+#         """
+#----------------------------------------------------------------------------------------
+# Running get_organelle for P29912_104_S12_L001
+# Previously, I ran get_organelle on the merged data of S104_merged. This dataset is too
+# large and get_organelle did not finish after 2 days. Here I want to re-run but only
+# with one of the two libraries sequenced for this sample.
+#----------------------------------------------------------------------------------------
+# rule mtDNA_assembly_P29912_104_S12_L001:
+#     input:
+#         fastq1="data/fastq/P29912_104_S12_L001.ucseqs_1.fastq.gz",
+#         fastq2="data/fastq/P29912_104_S12_L001.ucseqs_2.fastq.gz"
+#     output:
+#         ckp="results/mtDNA_get_organelle/P29912_104_S12_L001_mtDNA/P29912_104_S12_L001.getOrgComplete.txt"
+#     params:
+#         mtDNA_assembly_outdir="results/mtDNA_get_organelle/P29912_104_S12_L001_mtDNA",
+#         mtDNA_ref="data/mtDNA_genome/mtDNA_chlorophyceae_complete_genome.fasta",
+#         getorg_label="data/get_organelle_label_dataset/chlorophyceae_mt.label.fasta"
+#     resources:
+#         threads = 16, 
+#         mem_mb = 96000,
+#         runtime = "48h"
+#     conda:
+#         "envs/getorganelle.yaml"
+#     shell:
+#         """
+#         get_organelle_from_reads.py \
+#         -s {params.mtDNA_ref} \
+#         --genes {params.getorg_label} \
+#         -1 {input.fastq1} \
+#         -2 {input.fastq2} \
+#         -o {params.mtDNA_assembly_outdir} \
+#         -R 30 \
+#         -k 21,45,65,85,105 \
+#         -F embplant_mt \
+#         -t {resources.threads} \
+#         --overwrite
+#         touch {output.ckp}
+#         """
+#----------------------------------------------------------------------------------------
+# Copy all cpDNA assemblies into a separate folder and change their names
+#----------------------------------------------------------------------------------------
+rule copy_all_files:
     output:
-        ckp="results/mtDNA_get_organelle/{sample}_mtDNA/{sample}.getOrgComplete.txt"
-    params:
-        mtDNA_assembly_outdir="results/mtDNA_get_organelle/{sample}_mtDNA",
-        mtDNA_ref="data/mtDNA_genome/mtDNA_chlorophyceae_complete_genome.fasta",
-        getorg_label="data/get_organelle_label_dataset/chlorophyceae_mt.label.fasta"
-    resources:
-        threads = 16, 
-        mem_mb = 96000,
-        runtime = "48h"
-    conda:
-        "envs/getorganelle.yaml"
+        # A single "flag file" to mark successful completion of the rule
+        expand("results/cpDNA_assemblies/{sample}.cpDNA.fasta", sample=fastq_name)
     shell:
         """
-        get_organelle_from_reads.py -t 16 \
-        -s {params.mtDNA_ref} \
-        --genes {params.getorg_label} \
-        -1 {input.fastq1} \
-        -2 {input.fastq2} \
-        -o {params.mtDNA_assembly_outdir} \
-        -R 30 \
-        -k 21,45,65,85,105 \
-        -F embplant_mt \
-        -t {resources.threads} \
-        --overwrite
-        touch {output.ckp}
-        """
+        # Create output directory if it doesn't exist
+        mkdir -p results/cpDNA_assemblies/
 
-# For incomplete scaffolds - join_spades_fastg_by_blast.py
+        # Loop over all samples and their possible file patterns
+        for assembly in results/cpDNA_get_organelle/*_cpDNA/other_pt.K105.*.graph1.1.path_sequence.fasta; do
+            # Extract sample name from the directory structure
+            prefix=$(echo $assembly | cut -f3 -d "/" | cut -f1,2,3 -d "_")
+            
+            # Copy the file and rename it in the output directory
+            cp "$assembly" results/cpDNA_assemblies/$prefix.cpDNA.fasta
+        done
+        mv results/cpDNA_assemblies/S104_merged_cpDNA.cpDNA.fasta results/cpDNA_assemblies/S104_merged.cpDNA.fasta
+        mv results/cpDNA_assemblies/S115_merged_cpDNA.cpDNA.fasta results/cpDNA_assemblies/S115_merged.cpDNA.fasta
+        """
+#----------------------------------------------------------------------------------------
+# Concatenate cpDNA scaffolds based on cpDNA of C.reinhardtii
+#----------------------------------------------------------------------------------------
+rule ragtag_cpDNA:
+    input:
+        cpDNA_assembly="results/cpDNA_assemblies/{sample}.cpDNA.fasta"
+    output:
+        cpDNA_output="results/cpDNA_ragtag/{sample}_cpDNA/{sample}_cpDNA.ragtag.scaf.fasta"
+    params:
+        cpDNA_ragtag_outdir="results/cpDNA_ragtag/{sample}_cpDNA",
+        crein_cpDNA="data/cpDNA_genome/C.reinhardtii.cpdna.fa"
+    resources:
+        threads = 2,
+        runtime = "5h",
+        mem_mb = 12000
+    conda:
+        "envs/ragtag.yaml"
+    shell:
+        """
+        ragtag.py scaffold {params.crein_cpDNA} {input.cpDNA_assembly} -o {params.cpDNA_ragtag_outdir}
+        mv {params.cpDNA_ragtag_outdir}/ragtag.scaffold.fasta {output.cpDNA_output}
+        """
+#----------------------------------------------------------------------------------------
+# Rename Ragtag cpDNA scaffolds to scaffold_number 1 to N from largest to smallest
+#----------------------------------------------------------------------------------------
+import shutil
+import os
+
+rule ragtag_cpDNA_scaf_rename:
+    input:
+        cpDNA_ragtag="results/cpDNA_ragtag/{sample}_cpDNA/{sample}_cpDNA.ragtag.scaf.fasta"
+    output:
+        cpDNA_ragtag_scaf_renamed="results/cpDNA_ragtag/{sample}_cpDNA/{sample}_renamed_cpDNA.ragtag.scaf.fasta"
+    params:
+        cpDNA_assemblies_ragtag_dir="results/cpDNA_assemblies_ragtag"
+    run:
+        from Bio import SeqIO
+
+        # Read the FASTA file into a dictionary
+        def read_fasta_to_dict(fasta_file):
+            fasta_dict = {}
+            for record in SeqIO.parse(fasta_file, "fasta"):
+                fasta_dict[record.id] = str(record.seq)
+            return fasta_dict
+
+        # Rename scaffolds based on size and add species name
+        def rename_scaffolds(fasta_dict):
+            # Sort the dictionary by the length of the sequences (in descending order)
+            sorted_d = sorted(fasta_dict.items(), key=lambda x: len(x[1]), reverse=True)
+            
+            # Create a new dictionary with renamed keys
+            renamed_d = {}
+            for i, (key, seq) in enumerate(sorted_d):
+                if i == 0:  # For the longest scaffold
+                    renamed_d[f"contig_1_Ragtag"] = seq
+                else:
+                    renamed_d[f"contig_{i+1}"] = seq
+            return renamed_d
+
+        # Step 1: Read the FASTA file into a dictionary
+        fasta_dict = read_fasta_to_dict(input.cpDNA_ragtag)
+
+        # Step 2: Rename the scaffolds
+        renamed_scaffolds = rename_scaffolds(fasta_dict)
+
+        # Step 3: Write the renamed scaffolds to the output file
+        with open(output.cpDNA_ragtag_scaf_renamed, "w") as out_fasta:
+            for contig, seq in renamed_scaffolds.items():
+                out_fasta.write(f">{contig}\n{seq}\n")
+
+        # Step 4: Ensure the directory exists before copying
+        if not os.path.exists(params.cpDNA_assemblies_ragtag_dir):
+            os.makedirs(params.cpDNA_assemblies_ragtag_dir)
+
+        # Step 5: Copy the renamed FASTA file to the new folder
+        shutil.copy(output.cpDNA_ragtag_scaf_renamed, params.cpDNA_assemblies_ragtag_dir)
+#----------------------------------------------------------------------------------------
+# Annotate the cpDNA genomes
+#----------------------------------------------------------------------------------------
+# Extract CDS
+#----------------------------------------------------------------------------------------
+# Align
+#----------------------------------------------------------------------------------------
+# Clean alignment
+#----------------------------------------------------------------------------------------
+# Make cpDNA tree
+#----------------------------------------------------------------------------------------
+
+#----------------------------------------------------------------------------------------
+# Concatenate mtDNA scaffolds
+#----------------------------------------------------------------------------------------
+
+
 #----------------------------------------------------------------------------------------
 # Annotation of cpDNA in GeSeq
 #----------------------------------------------------------------------------------------
