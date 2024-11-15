@@ -232,28 +232,28 @@ rule ragtag_cpDNA_scaf_rename:
 #----------------------------------------------------------------------------------------
 # Extract CDS
 #----------------------------------------------------------------------------------------
-rule extract_CDS_from_gb_cpDNA:
-    input:
+# rule extract_CDS_from_gb_cpDNA:
+#     input:
 
-    output:
+#     output:
 
-    shell:
-        """
-        for i in *gb
-        do
-        echo $i
-        samplename=$(grep 'LOCUS' $i | awk '{print $2}')
-        echo $samplename
-        mv $i ${samplename}.gb
-        done
-        # Convert gene bank format to CDS
-        for i in *gb
-        do
-        echo $i
-        samplename=$(echo $i | cut -f1 -d ".")
-        get_annotated_regions_from_gb.py $i -o ${samplename}_cds -t CDS
-        done
-        """
+#     shell:
+#         """
+#         for i in *gb
+#         do
+#         echo $i
+#         samplename=$(grep 'LOCUS' $i | awk '{print $2}')
+#         echo $samplename
+#         mv $i ${samplename}.gb
+#         done
+#         # Convert gene bank format to CDS
+#         for i in *gb
+#         do
+#         echo $i
+#         samplename=$(echo $i | cut -f1 -d ".")
+#         get_annotated_regions_from_gb.py $i -o ${samplename}_cds -t CDS
+#         done
+#         """
 #----------------------------------------------------------------------------------------
 # Concantenate genes for all species - de-novo sequenced + NCBI genomes
 #----------------------------------------------------------------------------------------
