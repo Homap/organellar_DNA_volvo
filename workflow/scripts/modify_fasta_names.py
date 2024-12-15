@@ -54,7 +54,7 @@ fastaDict1 = readfasta(fasta)
 
 for key in fastaDict1.keys():
     if "--" in key:
-        seq_name = key.split("--")[0]#.replace(">", "")
+        seq_name = key.split("--")[0].split("_")[0]+"_"+key.split("--")[0].split("_")[1]#.replace(">", "")
         print(">"+seq_name)
         print(fastaDict1[key])
     else:

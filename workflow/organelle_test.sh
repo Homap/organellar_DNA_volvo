@@ -161,11 +161,11 @@ done
 
 # Concatenate all samples per gene
 # /proj/snic2022-23-81/cpDNA_assembly_phylo_volv/result/geseq_cpDNA_annotation/gb
-while read -r genename                                                 
-do  
-echo $genename
-cat *cds/gene/${genename}.fasta > ../../concat_per_gene_cpDNA/${genename}.fasta
-done < cpDNA_gene_set.txt
+# while read -r genename                                                 
+# do  
+# echo $genename
+# cat *cds/gene/${genename}.fasta > ../../concat_per_gene_cpDNA/${genename}.fasta
+# done < cpDNA_gene_set.txt
 
 # module load bioinfo-tools cufflinks/2.2.1
 # mkdir cpDNA_all_species
@@ -177,14 +177,14 @@ done < cpDNA_gene_set.txt
 # Names in Haematococcus lacustris, re-annotated using GeSeq
 # gffread -w Haematococcus_lacustris_cpDNA_cds.fasta -g Haematococcus_lacustris.fasta GeSeqJob-20240604-100807_NC_037007.1_GFF3.gff3
 
-cd /proj/snic2022-23-81/cpDNA_assembly_phylo_volv/result/cpDNA_all_species/cpDNA_ncbi
-mkdir concantenated_cpDNA
-# Concatenate all genes from the NCBI
-while read -r genename                                                 
-do  
-echo $genename
-cat *_${genename}.fasta >> concantenated_cpDNA/${genename}.fasta
-done < ../cpDNA_gene_set.txt
+# cd /proj/snic2022-23-81/cpDNA_assembly_phylo_volv/result/cpDNA_all_species/cpDNA_ncbi
+# mkdir concantenated_cpDNA
+# # Concatenate all genes from the NCBI
+# while read -r genename                                                 
+# do  
+# echo $genename
+# cat *_${genename}.fasta >> concantenated_cpDNA/${genename}.fasta
+# done < ../cpDNA_gene_set.txt
 
 # Concatenate all NCBI genes with the concatenated sample genes
 for i in ../../../concat_per_gene_cpDNA/*fasta
@@ -206,14 +206,14 @@ done
 rm -f *all.fasta
 
 # Do one alignment per gene
-module load bioinfo-tools MAFFT/7.407
-../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/aligned
-for input_fasta in ../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/*all.edited.fasta
-do
-genename=$(echo $input_fasta | cut -f6 -d "/" | cut -f1 -d ".")
-echo $genename
-sbatch mafft_alignment.sh ${input_fasta} ../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/aligned/${genename}.aligned.fasta
-done
+# module load bioinfo-tools MAFFT/7.407
+# ../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/aligned
+# for input_fasta in ../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/*all.edited.fasta
+# do
+# genename=$(echo $input_fasta | cut -f6 -d "/" | cut -f1 -d ".")
+# echo $genename
+# sbatch mafft_alignment.sh ${input_fasta} ../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/aligned/${genename}.aligned.fasta
+# done
 
 # Cleaning the alignment by removing common issues such as 
 # gaps, divergent sequences, large insertions and deletions and poorly aligned sequence ends can substantially improve analyses. 

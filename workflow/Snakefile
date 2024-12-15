@@ -3,7 +3,9 @@ __email__ = "homa.papoli_yazdi@biol.lu.se"
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
 configfile: "config/config.yaml"
-localrules: copy_all_files, ragtag_cpDNA_scaf_rename
+localrules: copy_all_files, ragtag_cpDNA_scaf_rename, copy_all_files_mtDNA, ragtag_mtDNA_scaf_rename, mtDNA_scaf_rename_pan_eud,\
+copy_GeneBank, extract_CDS_cpDNA, extract_CDS_mtDNA, extract_coverage_match_cpDNA, extract_coverage_match_mtDNA, plot_coverage_match, \
+process_fasta_files_cpDNA, process_fasta_files_mtDNA, find_gene_sets_cpDNA, find_gene_sets_mtDNA, concatenate_CDS, edit_cat_fasta
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
@@ -18,20 +20,114 @@ from Bio import SeqIO
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
 design_table = pd.read_table(config["sample_table"], sep="\t")
 fastq_name = design_table.Fastq_Name
+values_to_remove = ["S104_merged", "P26503_103_S158", "P26503_105_S160"]
+design_table_mtDNA_ragtag = design_table[~design_table.Fastq_Name.isin(values_to_remove)]
+fastq_name_mtDNA_ragtag = design_table_mtDNA_ragtag.Fastq_Name
+design_table_mtDNA = design_table[design_table.Fastq_Name != "S104_merged"]
+fastq_name_mtDNA = design_table_mtDNA.Fastq_Name
 
 rule all:
     input:
-        organelle_DNA = expand(["results/cpDNA_get_organelle/{sample}_cpDNA/{sample}.getOrgComplete.txt", 
-        "results/cpDNA_ragtag/{sample}_cpDNA/{sample}_cpDNA.ragtag.scaf.fasta",
-        "results/cpDNA_assemblies_ragtag/{sample}_renamed_cpDNA.ragtag.scaf.fasta",
-        "results/mtDNA_get_organelle/{sample}_mtDNA/{sample}.getOrgComplete.txt"
-        ],sample=fastq_name)
+        # Fixed inputs for both cpDNA and mtDNA
+        expand("results/cpDNA_get_organelle/{sample}_cpDNA/{sample}.getOrgComplete.txt", sample=fastq_name),
+        "results/cpDNA_assemblies/copyingDone.cpDNA.fasta",
+        expand("results/cpDNA_ragtag/{sample}_cpDNA/{sample}_cpDNA.ragtag.scaf.fasta", sample=fastq_name),
+        expand("results/cpDNA_assemblies_ragtag/{sample}_renamed_cpDNA.ragtag.scaf.fasta", sample=fastq_name),
+        expand("results/mtDNA_get_organelle/{sample_mtDNA}_mtDNA/{sample_mtDNA}.getOrgComplete.txt", sample_mtDNA=fastq_name_mtDNA),
+        "results/mtDNA_assemblies/copyingDone.mtDNA.txt",
+        expand("results/mtDNA_ragtag/{sample_mtDNA_ragtag}_mtDNA/{sample_mtDNA_ragtag}_mtDNA.ragtag.scaf.fasta", sample_mtDNA_ragtag=fastq_name_mtDNA_ragtag),
+        expand("results/mtDNA_assemblies_ragtag/{sample_mtDNA_ragtag}_renamed_mtDNA.ragtag.scaf.fasta", sample_mtDNA_ragtag=fastq_name_mtDNA_ragtag),
+        expand("results/cpDNA_genbank_annotation/{sample}.gb", sample = fastq_name),
+        expand("results/mtDNA_genbank_annotation/{sample_mtDNA}.gb", sample_mtDNA = fastq_name_mtDNA),
+        expand("results/cpDNA_CDS/{sample}_cds_done.txt", sample=fastq_name),
+        expand("results/mtDNA_CDS/{sample_mtDNA}_cds_done.txt", sample_mtDNA=fastq_name_mtDNA),
+        # Results for filtered cpDNA and mtDNA gene files
+        expand("results/cpDNA_CDS/{sample}_cds/gene/filtered/processing.done", sample=fastq_name),
+        expand("results/mtDNA_CDS/{sample_mtDNA}_cds/gene/filtered/processing.done", sample_mtDNA=fastq_name_mtDNA),
+        # Figures and summary TSVs
+        "results/figures/cpDNA_paired_boxplot_gene_groups.png",
+        "results/figures/cpDNA_paired_boxplot_individual_genes_with_groups_sorted.png",
+        "results/cpDNA_genbank_info/cpDNA_gene_medians.tsv",
+        "results/figures/mtDNA_paired_boxplot_gene_groups.png",
+        "results/figures/mtDNA_paired_boxplot_individual_genes_with_groups_and_na_sorted.png",
+        "results/mtDNA_genbank_info/mtDNA_gene_medians.tsv",
+
+        "config/cpDNA_unique_gene_names.txt",
+        "config/mtDNA_unique_gene_names.txt",
+
+        "results/cpDNA_concat/cpDNA.done.txt",
+        "results/mtDNA_concat/mtDNA.done.txt",
+
+        "results/cpDNA_concat/cpDNA.nameedit.done.txt",
+        "results/mtDNA_concat/mtDNA.nameedit.done.txt"
+
+        # Processed filtered fasta files for cpDNA
+        # expand("results/cpDNA_CDS/{sample}_cds/gene/filtered/{genename}_filtered.fasta", genename=["atpA", "atpB"], sample= fastq_name)
+
+        # # "results/mtDNA_get_organelle/P26503_125_S177_mtDNA/from_assembly/P26503_125_S177.getOrgComplete.txt",
+        # # "results/mtDNA_get_organelle/P28566_117_S217_mtDNA/from_assembly/P28566_117_S217.getOrgComplete.txt",
+        # # "results/mtDNA_get_organelle/S104_merged_mtDNA/from_assembly/S104_merged.getOrgComplete.txt",
+
+        
+
+# rule all:
+#     input:
+#         organelle_DNA = expand(["results/cpDNA_get_organelle/{sample}_cpDNA/{sample}.getOrgComplete.txt", 
+#         "results/cpDNA_assemblies/copyingDone.cpDNA.fasta",
+#         "results/cpDNA_ragtag/{sample}_cpDNA/{sample}_cpDNA.ragtag.scaf.fasta",
+#         "results/cpDNA_assemblies_ragtag/{sample}_renamed_cpDNA.ragtag.scaf.fasta",
+#         "results/mtDNA_get_organelle/{sample}_mtDNA/{sample}.getOrgComplete.txt",
+#         "results/mtDNA_get_organelle/P26503_125_S177_mtDNA/from_assembly/P26503_125_S177.getOrgComplete.txt",
+#         "results/mtDNA_get_organelle/P28566_117_S217_mtDNA/from_assembly/P28566_117_S217.getOrgComplete.txt",
+#         "results/mtDNA_get_organelle/S104_merged_mtDNA/from_assembly/S104_merged.getOrgComplete.txt",
+#         "results/mtDNA_assemblies/copyingDone.mtDNA.txt",
+#         "results/mtDNA_ragtag/{sample_mtDNA_ragtag}_mtDNA/{sample_mtDNA_ragtag}_mtDNA.ragtag.scaf.fasta",
+#         "results/mtDNA_assemblies_ragtag/{sample_mtDNA_ragtag}_renamed_mtDNA.ragtag.scaf.fasta",
+#         "results/mtDNA_assemblies/P26503_103_S158_renamed.mtDNA.fasta",
+#         "results/mtDNA_assemblies/P26503_105_S160_renamed.mtDNA.fasta",
+#         "results/cpDNA_genbank_annotation/copy.done.txt",
+#         "results/mtDNA_genbank_annotation/copy.done.txt",
+#         "results/cpDNA_CDS/getCDS_cpDNA.txt",
+#         "results/mtDNA_CDS/getCDS_mtDNA.txt",
+#         "results/cpDNA_genbank_info/{sample}.main_output.tsv",
+#         "results/cpDNA_genbank_info/{sample}.secondary_output.tsv",
+#         "results/mtDNA_genbank_info/{sample_mtDNA}.main_output.tsv",
+#         "results/mtDNA_genbank_info/{sample_mtDNA}.secondary_output.tsv",
+#         "results/figures/cpDNA_paired_boxplot_gene_groups.png",
+#         "results/figures/cpDNA_paired_boxplot_individual_genes_with_groups_sorted.png",
+#         "results/cpDNA_genbank_info/cpDNA_gene_medians.tsv",
+#         "results/figures/mtDNA_paired_boxplot_gene_groups.png",
+#         "results/figures/mtDNA_paired_boxplot_individual_genes_with_groups_and_na_sorted.png",
+#         "results/mtDNA_genbank_info/mtDNA_gene_medians.tsv",
+#         "results/cpDNA_CDS/{cpDNAbase}.gb_cds/gene/{cpDNAgenename}_filtered.fasta"
+#         ],sample=fastq_name, sample_mtDNA = fastq_name_mtDNA, sample_mtDNA_ragtag = fastq_name_mtDNA_ragtag, 
+#         cpDNAgenename=["atpA","atpB","atpE","atpF","atpH","atpI",
+#         "ccsA","cemA","chlB","chlL","chlN","clpP1","ftsH","grnE(uuc)",
+#         "pafI","pafII","pbf1","pcbC","petA","petB","petD","petG","petL",
+#         "psaA","psaB","psaC","psaJ","psb30","psbA","psbB","psbC","psbD","psbE","psbF","psbH","psbI","psbJ","psbK","psbL","psbM","psbT","psbZ","rbcL",
+#         "rnl","rns","rpl14","rpl16","rpl2","rpl20","rpl23","rpl32","rpl36","rpl5",
+#         "rpoA","rpoB-1","rpoB-2","rpoBa","rpoBb","rpoC1","rpoC1a","rpoC1b","rpoC2","rps11","rps12","rps14","rps18","rps19","rps2","rps2a","rps2b",
+#         "rps3","rps4","rps7","rps8","rps9","rrf","rrl","rrn16S","rrn23S","rrn5","rrn5S","rrn7","rrnF","rrnL","rrnS","rrnl","rrs",
+#         "trnA-UGC","trnD-GUC","trnE-UUC","trnG-UCC","trnH-GUG","trnL","trnL-UAA","trnL-UAG","trnMf-CAU","trnN-GUC","trnQ-UUG","trnR-ACG",
+#         "trnR-UCU","trnS-GCU","trnT-UGU","trnW-CCA","trnfM-CAU","tufA","ycf1"],
+#         cpDNAbase=[sample.split("_")[0] for sample in fastq_name], mtDNAbase=[sample_mtDNA.split("_")[0] for sample_mtDNA in fastq_name_mtDNA])
+        # "results/mtDNA_CDS/{mtDNAbase}.gb_cds/gene/{mtDNAgenename}_filtered.fasta",
+        # mtDNAgenename=["atp1","cob","cox1","cytb","nad1","nad2","nad4","nad5","nad6",
+        # "rnl","rnl2","rnl3","rnl4","rnl6","rnl_e","rnl_f","rnl_g","rnl_h","rnld",
+        # "rnnL1","rrnL","rrnL1","rrnL2","rrnL2a","rrnL2b","rrnL3","rrnL3a","rrnL3b",
+        # "rrnL4","rrnL5","rrnL6","rrnL7","rrnL8","rrnS1","rrnS2","rrnS3","rrnS4","rrns4","rtl","trnM-CAU","trnQ","trnQ-UUG","trnW-CCA"], 
+        # "results/cpDNA_concat/cpDNA.done.txt",
+        # "results/mtDNA_concat/mtDNA.done.txt",
+        # "results/cpDNA_concat/cpDNA.nameedit.done.txt",
+        # "results/mtDNA_concat/mtDNA.nameedit.done.txt",
+        # "results/cpDNA_aligned/aligned.done.txt",
+        # "results/mtDNA_aligned/aligned.done.txt"
 # "results/mtDNA_get_organelle/P29912_104_S12_L001_mtDNA/P29912_104_S12_L001.getOrgComplete.txt"
 #----------------------------------------------------------------------------------------
 # Assembly of organellar genomes
 #----------------------------------------------------------------------------------------
 # Start with unclassified reads given by Kraken2
-# Also filtered by Fastp and bbtols look in:
+# Also filtered by Fastp and bbtools look in:
 # /proj/snic2022-23-81/algae_phylo_volv/data/soft_links/code/filtering_data.md
 # /proj/snic2022-23-81/algae_phylo_volv/data/soft_links/code/kraken2_run.sh 
 #----------------------------------------------------------------------------------------
@@ -108,44 +204,93 @@ rule mtDNA_assembly:
 # large and get_organelle did not finish after 2 days. Here I want to re-run but only
 # with one of the two libraries sequenced for this sample.
 #----------------------------------------------------------------------------------------
-# rule mtDNA_assembly_P29912_104_S12_L001:
-#     input:
-#         fastq1="data/fastq/P29912_104_S12_L001.ucseqs_1.fastq.gz",
-#         fastq2="data/fastq/P29912_104_S12_L001.ucseqs_2.fastq.gz"
-#     output:
-#         ckp="results/mtDNA_get_organelle/P29912_104_S12_L001_mtDNA/P29912_104_S12_L001.getOrgComplete.txt"
-#     params:
-#         mtDNA_assembly_outdir="results/mtDNA_get_organelle/P29912_104_S12_L001_mtDNA",
-#         mtDNA_ref="data/mtDNA_genome/mtDNA_chlorophyceae_complete_genome.fasta",
-#         getorg_label="data/get_organelle_label_dataset/chlorophyceae_mt.label.fasta"
-#     resources:
-#         threads = 16, 
-#         mem_mb = 96000,
-#         runtime = "48h"
-#     conda:
-#         "envs/getorganelle.yaml"
-#     shell:
-#         """
-#         get_organelle_from_reads.py \
-#         -s {params.mtDNA_ref} \
-#         --genes {params.getorg_label} \
-#         -1 {input.fastq1} \
-#         -2 {input.fastq2} \
-#         -o {params.mtDNA_assembly_outdir} \
-#         -R 30 \
-#         -k 21,45,65,85,105 \
-#         -F embplant_mt \
-#         -t {resources.threads} \
-#         --overwrite
-#         touch {output.ckp}
-#         """
+rule mtDNA_assembly_P26503_125:
+    input:
+        gfa="results/mtDNA_get_organelle/P26503_125_S177_mtDNA/extended_spades/assembly_graph.fastg"
+    output:
+        ckp="results/mtDNA_get_organelle/P26503_125_S177_mtDNA/from_assembly/P26503_125_S177.getOrgComplete.txt"
+    params:
+        mtDNA_assembly_outdir="results/mtDNA_get_organelle/P26503_125_S177_mtDNA/from_assembly",
+        getorg_label="data/get_organelle_label_dataset/chlorophyceae_mt.label.fasta"
+    resources:
+        threads = 16, 
+        mem_mb = 96000,
+        runtime = "48h"
+    conda:
+        "envs/getorganelle.yaml"
+    shell:
+        """
+        get_organelle_from_assembly.py \
+        --genes {params.getorg_label} \
+        -g {input.gfa} \
+        -o {params.mtDNA_assembly_outdir} \
+        -F embplant_mt \
+        -t {resources.threads} \
+        --disentangle-time-limit=86400 \
+        --overwrite
+        touch {output.ckp}
+        """
 #----------------------------------------------------------------------------------------
-# Copy all cpDNA assemblies into a separate folder and change their names
+rule mtDNA_assembly_P28566_117:
+    input:
+        gfa="results/mtDNA_get_organelle/P28566_117_S217_mtDNA/extended_spades/assembly_graph.fastg"
+    output:
+        ckp="results/mtDNA_get_organelle/P28566_117_S217_mtDNA/from_assembly/P28566_117_S217.getOrgComplete.txt"
+    params:
+        mtDNA_assembly_outdir="results/mtDNA_get_organelle/P28566_117_S217_mtDNA/from_assembly",
+        getorg_label="data/get_organelle_label_dataset/chlorophyceae_mt.label.fasta"
+    resources:
+        threads = 16, 
+        mem_mb = 96000,
+        runtime = "48h"
+    conda:
+        "envs/getorganelle.yaml"
+    shell:
+        """
+        get_organelle_from_assembly.py \
+        --genes {params.getorg_label} \
+        -g {input.gfa} \
+        -o {params.mtDNA_assembly_outdir} \
+        -F embplant_mt \
+        -t {resources.threads} \
+        --disentangle-time-limit=86400 \
+        --overwrite
+        touch {output.ckp}
+        """
+#----------------------------------------------------------------------------------------
+rule mtDNA_assembly_S104_merged:
+    input:
+        gfa="results/mtDNA_get_organelle/S104_merged_mtDNA/extended_spades/assembly_graph.fastg"
+    output:
+        ckp="results/mtDNA_get_organelle/S104_merged_mtDNA/from_assembly/S104_merged.getOrgComplete.txt"
+    params:
+        mtDNA_assembly_outdir="results/mtDNA_get_organelle/S104_merged_mtDNA/from_assembly",
+        getorg_label="data/get_organelle_label_dataset/chlorophyceae_mt.label.fasta"
+    resources:
+        threads = 16, 
+        mem_mb = 96000,
+        runtime = "48h"
+    conda:
+        "envs/getorganelle.yaml"
+    shell:
+        """
+        get_organelle_from_assembly.py \
+        --genes {params.getorg_label} \
+        -g {input.gfa} \
+        -o {params.mtDNA_assembly_outdir} \
+        -F embplant_mt \
+        -t {resources.threads} \
+        --disentangle-time-limit=86400 \
+        --overwrite
+        touch {output.ckp}
+        """
+#----------------------------------------------------------------------------------------
+# Copy all cpDNA and mtDNA assemblies into a separate folder and change their names
 #----------------------------------------------------------------------------------------
 rule copy_all_files:
     output:
         # A single "flag file" to mark successful completion of the rule
-        expand("results/cpDNA_assemblies/{sample}.cpDNA.fasta", sample=fastq_name)
+        "results/cpDNA_assemblies/copyingDone.cpDNA.fasta"
     shell:
         """
         # Create output directory if it doesn't exist
@@ -161,6 +306,36 @@ rule copy_all_files:
         done
         mv results/cpDNA_assemblies/S104_merged_cpDNA.cpDNA.fasta results/cpDNA_assemblies/S104_merged.cpDNA.fasta
         mv results/cpDNA_assemblies/S115_merged_cpDNA.cpDNA.fasta results/cpDNA_assemblies/S115_merged.cpDNA.fasta
+        touch {output}
+        """
+#----------------------------------------------------------------------------------------
+# Copy all cpDNA assemblies into a separate folder and change their names
+#----------------------------------------------------------------------------------------
+rule copy_all_files_mtDNA:
+    output:
+        # A single "flag file" to mark successful completion of the rule
+        "results/mtDNA_assemblies/copyingDone.mtDNA.txt"
+    shell:
+        """
+        # Create output directory if it doesn't exist
+        mkdir -p results/mtDNA_assemblies/
+
+        # Loop over all samples and their possible file patterns
+        for assembly in results/mtDNA_get_organelle/*_mtDNA/embplant_mt.K105.*.graph1.1.path_sequence.fasta; do
+            # Extract sample name from the directory structure
+            prefix=$(echo $assembly | cut -f3 -d "/" | cut -f1,2,3 -d "_")
+            echo $prefix
+            # Copy the file and rename it in the output directory
+            cp "$assembly" results/mtDNA_assemblies/$prefix.mtDNA.fasta
+        done
+        echo results/mtDNA_get_organelle/P26503_125_S177_mtDNA/from_assembly/embplant_mt.scaffolds.graph1.1.path_sequence.fasta
+        cp results/mtDNA_get_organelle/P26503_125_S177_mtDNA/from_assembly/embplant_mt.scaffolds.graph1.1.path_sequence.fasta results/mtDNA_assemblies/P26503_125_S177.mtDNA.fasta
+        echo results/mtDNA_get_organelle/P28566_117_S217_mtDNA/from_assembly/embplant_mt.complete.graph1.1.path_sequence.fasta
+        cp results/mtDNA_get_organelle/P28566_117_S217_mtDNA/from_assembly/embplant_mt.complete.graph1.1.path_sequence.fasta results/mtDNA_assemblies/P28566_117_S217.mtDNA.fasta
+        mv results/mtDNA_assemblies/S115_merged_mtDNA.mtDNA.fasta results/mtDNA_assemblies/S115_merged.mtDNA.fasta
+        cp results/mtDNA_get_organelle/P26503_105_S160_mtDNA/embplant_mt.K105.scaffolds.graph1.repeat_pattern1.1.path_sequence.fasta results/mtDNA_assemblies/P26503_105_S160.mtDNA.fasta
+        cp results/mtDNA_get_organelle/P28566_116_S216_mtDNA/embplant_mt.K105.complete.graph1.1.repeat_pattern1.path_sequence.fasta results/mtDNA_assemblies/P28566_116_S216.mtDNA.fasta
+        touch {output}
         """
 #----------------------------------------------------------------------------------------
 # Concatenate cpDNA scaffolds based on cpDNA of C.reinhardtii
@@ -227,71 +402,302 @@ rule ragtag_cpDNA_scaf_rename:
             for contig, seq in renamed_scaffolds.items():
                 out_fasta.write(f">{contig}\n{seq}\n")
 #----------------------------------------------------------------------------------------
-# Annotate the cpDNA genomes using geseq
+# Concatenate mtDNA scaffolds based on mtDNA of C.reinhardtii
+#----------------------------------------------------------------------------------------
+rule ragtag_mtDNA:
+    input:
+        "results/mtDNA_assemblies/copyingDone.mtDNA.txt",
+        mtDNA_assembly="results/mtDNA_assemblies/{sample_mtDNA_ragtag}.mtDNA.fasta"
+    output:
+        mtDNA_output="results/mtDNA_ragtag/{sample_mtDNA_ragtag}_mtDNA/{sample_mtDNA_ragtag}_mtDNA.ragtag.scaf.fasta"
+    params:
+        mtDNA_ragtag_outdir="results/mtDNA_ragtag/{sample_mtDNA_ragtag}_mtDNA",
+        crein_mtDNA="data/mtDNA_genome/C.reinhardtii.mtdna.fa"
+    resources:
+        threads = 2,
+        runtime = "5h",
+        mem_mb = 12000
+    conda:
+        "envs/ragtag.yaml"
+    shell:
+        """
+        ragtag.py scaffold {params.crein_mtDNA} {input.mtDNA_assembly} -o {params.mtDNA_ragtag_outdir}
+        mv {params.mtDNA_ragtag_outdir}/ragtag.scaffold.fasta {output.mtDNA_output}
+        """
+#----------------------------------------------------------------------------------------
+# ragtag_mtDNA failed for P26503_103_S158 and P26503_105_S160.mtDNA.fasta because there were no useful alignments. These two are PANMOR_K1379 and EUDELE_NIV14. 
+# We keep these as they are and annotate them.
+rule mtDNA_scaf_rename_pan_eud:
+    input:
+        mtDNA_pan="results/mtDNA_assemblies/P26503_103_S158.mtDNA.fasta",
+        mtDNA_eud="results/mtDNA_assemblies/P26503_105_S160.mtDNA.fasta"
+    output:
+        mtDNA_scaf_renamed_pan="results/mtDNA_assemblies/P26503_103_S158_renamed.mtDNA.fasta",
+        mtDNA_scaf_renamed_eud="results/mtDNA_assemblies/P26503_105_S160_renamed.mtDNA.fasta"
+    run:
+        # Read the FASTA file into a dictionary
+        def read_fasta_to_dict(fasta_file):
+            fasta_dict = {}
+            for record in SeqIO.parse(fasta_file, "fasta"):
+                fasta_dict[record.id] = str(record.seq)
+            return fasta_dict
+
+        # Rename scaffolds based on size and add Fastq_Name
+        def rename_scaffolds(fasta_dict, sample):
+            # Sort the dictionary by the length of the sequences (in descending order)
+            sorted_d = sorted(fasta_dict.items(), key=lambda x: len(x[1]), reverse=True)
+            
+            # Create a new dictionary with renamed keys
+            renamed_d = {}
+            for i, (key, seq) in enumerate(sorted_d):
+                renamed_d[f"C{i+1}.{sample}"] = seq
+            return renamed_d
+
+        # Step 1: Read the FASTA file into a dictionary
+        fasta_dict_pan = read_fasta_to_dict(input.mtDNA_pan)
+        fasta_dict_eud = read_fasta_to_dict(input.mtDNA_eud)
+
+        # Step 2: Rename the scaffolds
+        renamed_scaffolds_pan = rename_scaffolds(fasta_dict_pan, "P26503_103_S158")
+        renamed_scaffolds_eud = rename_scaffolds(fasta_dict_eud, "P26503_105_S160")
+
+        # Step 3: Write the renamed scaffolds to the output file
+        with open(output.mtDNA_scaf_renamed_pan, "w") as out_fasta:
+            for contig, seq in renamed_scaffolds_pan.items():
+                out_fasta.write(f">{contig}\n{seq}\n")
+        with open(output.mtDNA_scaf_renamed_eud, "w") as out_fasta:
+            for contig, seq in renamed_scaffolds_eud.items():
+                out_fasta.write(f">{contig}\n{seq}\n")
+#----------------------------------------------------------------------------------------
+# Rename Ragtag mtDNA scaffolds to scaffold_number 1 to N from largest to smallest
+#----------------------------------------------------------------------------------------
+rule ragtag_mtDNA_scaf_rename:
+    input:
+        mtDNA_ragtag="results/mtDNA_ragtag/{sample_mtDNA_ragtag}_mtDNA/{sample_mtDNA_ragtag}_mtDNA.ragtag.scaf.fasta"
+    output:
+        mtDNA_ragtag_scaf_renamed="results/mtDNA_assemblies_ragtag/{sample_mtDNA_ragtag}_renamed_mtDNA.ragtag.scaf.fasta"
+    params:
+        mtDNA_assemblies_ragtag_dir="results/mtDNA_assemblies_ragtag"
+    run:
+        # Read the FASTA file into a dictionary
+        def read_fasta_to_dict(fasta_file):
+            fasta_dict = {}
+            for record in SeqIO.parse(fasta_file, "fasta"):
+                fasta_dict[record.id] = str(record.seq)
+            return fasta_dict
+
+        # Rename scaffolds based on size and add Fastq_Name
+        def rename_scaffolds(fasta_dict, sample):
+            # Sort the dictionary by the length of the sequences (in descending order)
+            sorted_d = sorted(fasta_dict.items(), key=lambda x: len(x[1]), reverse=True)
+            
+            # Create a new dictionary with renamed keys
+            renamed_d = {}
+            for i, (key, seq) in enumerate(sorted_d):
+                if i == 0:  # For the longest scaffold
+                    renamed_d[f"C1.RT.{sample}"] = seq
+                else:
+                    renamed_d[f"C{i+1}.{sample}"] = seq
+            return renamed_d
+
+        # Step 1: Read the FASTA file into a dictionary
+        fasta_dict = read_fasta_to_dict(input.mtDNA_ragtag)
+
+        # Step 2: Rename the scaffolds
+        renamed_scaffolds = rename_scaffolds(fasta_dict, wildcards.sample_mtDNA_ragtag)
+
+        # Step 3: Write the renamed scaffolds to the output file
+        with open(output.mtDNA_ragtag_scaf_renamed, "w") as out_fasta:
+            for contig, seq in renamed_scaffolds.items():
+                out_fasta.write(f">{contig}\n{seq}\n")
+#----------------------------------------------------------------------------------------
+# Annotate the cpDNA and mtDNA genomes using geseq
 # For annotation, we use Geseq with the following parameters: 
+# scp -r cpDNA_annotation_algae homap@rackham.uppmax.uu.se:/proj/snic2022-23-81/organellar_DNA_volvocine/results
+# scp -r mtDNA_annotation_algae homap@rackham.uppmax.uu.se:/proj/snic2022-23-81/organellar_DNA_volvocine/results
 #----------------------------------------------------------------------------------------
-# Extract CDS
+# Copy all GenBank files into one directory for cpDNA and one directory for mtDNA
+include: "rules/copy_GeneBank.smk"
 #----------------------------------------------------------------------------------------
-# rule extract_CDS_from_gb_cpDNA:
-#     input:
-
-#     output:
-
-#     shell:
-#         """
-#         for i in *gb
-#         do
-#         echo $i
-#         samplename=$(grep 'LOCUS' $i | awk '{print $2}')
-#         echo $samplename
-#         mv $i ${samplename}.gb
-#         done
-#         # Convert gene bank format to CDS
-#         for i in *gb
-#         do
-#         echo $i
-#         samplename=$(echo $i | cut -f1 -d ".")
-#         get_annotated_regions_from_gb.py $i -o ${samplename}_cds -t CDS
-#         done
-#         """
+# Extract CDS - cpDNA
+#----------------------------------------------------------------------------------------
+rule extract_CDS_cpDNA:
+    input:
+        cpDNA_gb="results/cpDNA_genbank_annotation/{sample}.gb"
+    output:
+        touch("results/cpDNA_CDS/{sample}_cds_done.txt")
+    params:
+        "results/cpDNA_CDS/{sample}_cds"
+    conda:
+        "envs/getorganelle.yaml"
+    shell:
+        """
+        get_annotated_regions_from_gb.py {input.cpDNA_gb} -o {params} -t CDS
+        """
+#----------------------------------------------------------------------------------------
+# Extract CDS - mtDNA
+#----------------------------------------------------------------------------------------
+rule extract_CDS_mtDNA:
+    input:
+        mtDNA_gb="results/mtDNA_genbank_annotation/{sample_mtDNA}.gb"
+    output:
+        touch("results/mtDNA_CDS/{sample_mtDNA}_cds_done.txt")
+    params:
+        "results/mtDNA_CDS/{sample_mtDNA}_cds"
+    conda:
+        "envs/getorganelle.yaml"
+    shell:
+        """
+        get_annotated_regions_from_gb.py {input.mtDNA_gb} -o {params} -t CDS
+        """
+#----------------------------------------------------------------------------------------
+# Exctarct coverage and match percentages for genes on cpDNA
+#----------------------------------------------------------------------------------------
+rule extract_coverage_match_cpDNA:
+    input:
+        cpDNA_gb="results/cpDNA_genbank_annotation/{sample}.gb"
+    output:
+        cpDNA_main_info="results/cpDNA_genbank_info/{sample}.main_output.tsv",
+        cpDNA_secondary_info="results/cpDNA_genbank_info/{sample}.secondary_output.tsv"
+    shell:
+        """
+        python workflow/scripts/extract_cov_match_gb.py {input.cpDNA_gb} {output.cpDNA_main_info} {output.cpDNA_secondary_info}
+        """
+#----------------------------------------------------------------------------------------
+# Exctarct coverage and match percentages for genes on mtDNA
+#----------------------------------------------------------------------------------------
+rule extract_coverage_match_mtDNA:
+    input:
+        mtDNA_gb="results/mtDNA_genbank_annotation/{sample_mtDNA}.gb"
+    output:
+        mtDNA_main_info="results/mtDNA_genbank_info/{sample_mtDNA}.main_output.tsv",
+        mtDNA_secondary_info="results/mtDNA_genbank_info/{sample_mtDNA}.secondary_output.tsv"
+    shell:
+        """
+        python workflow/scripts/extract_cov_match_gb.py {input.mtDNA_gb} {output.mtDNA_main_info} {output.mtDNA_secondary_info}
+        """
+#----------------------------------------------------------------------------------------
+# Plot boxplot of coverage and match for each gene across all species
+#----------------------------------------------------------------------------------------
+rule plot_coverage_match:
+    input:
+        expand("results/cpDNA_genbank_info/{sample}.main_output.tsv", sample = fastq_name),
+        expand("results/mtDNA_genbank_info/{sample_mtDNA}.main_output.tsv", sample_mtDNA = fastq_name_mtDNA)
+    output:
+        "results/figures/cpDNA_paired_boxplot_gene_groups.png",
+        "results/figures/cpDNA_paired_boxplot_individual_genes_with_groups_sorted.png",
+        "results/cpDNA_genbank_info/cpDNA_gene_medians.tsv",
+        "results/figures/mtDNA_paired_boxplot_gene_groups.png",
+        "results/figures/mtDNA_paired_boxplot_individual_genes_with_groups_and_na_sorted.png",
+        "results/mtDNA_genbank_info/mtDNA_gene_medians.tsv"
+    shell:
+        """
+        python workflow/scripts/plot_coverage_match_cpDNA.py
+        python workflow/scripts/plot_coverage_match_mtDNA.py
+        """
+#----------------------------------------------------------------------------------------
+# From CDS fasta, if there is more than one sequence in each gene, choose the one present
+# in {sample}.main_output.tsv
+#----------------------------------------------------------------------------------------
+rule process_fasta_files_cpDNA:
+    input:
+        table="results/cpDNA_genbank_info/{sample}.main_output.tsv",
+        cds="results/cpDNA_CDS/{sample}_cds_done.txt"
+    output:
+        touch("results/cpDNA_CDS/{sample}_cds/gene/filtered/processing.done")
+    params:
+        fasta_dir = "results/cpDNA_CDS/{sample}_cds/gene",
+        output_dir = "results/cpDNA_CDS/{sample}_cds/gene/filtered" 
+    shell:
+        "python workflow/scripts/choose_best_sequence.py {params.fasta_dir} {input.table} {params.output_dir}"
+#----------------------------------------------------------------------------------------
+# From CDS fasta, if there is more than one sequence in each gene, choose the one present
+# in {sample}.main_output.tsv
+#----------------------------------------------------------------------------------------
+rule process_fasta_files_mtDNA:
+    input:
+        table="results/mtDNA_genbank_info/{sample_mtDNA}.main_output.tsv",
+        cds="results/mtDNA_CDS/{sample_mtDNA}_cds_done.txt"
+    output:
+        touch("results/mtDNA_CDS/{sample_mtDNA}_cds/gene/filtered/processing.done")
+    params:
+        fasta_dir = "results/mtDNA_CDS/{sample_mtDNA}_cds/gene",
+        output_dir = "results/mtDNA_CDS/{sample_mtDNA}_cds/gene/filtered" 
+    shell:
+        "python workflow/scripts/choose_best_sequence.py {params.fasta_dir} {input.table} {params.output_dir}"
+#----------------------------------------------------------------------------------------
+# Find unique gene sets across all filtered fasta files for cpDNA
+#----------------------------------------------------------------------------------------
+include: "rules/unique_gene_sets_cpDNA.smk"
+#----------------------------------------------------------------------------------------
+# Find unique gene sets across all filtered fasta files for mtDNA
+#----------------------------------------------------------------------------------------
+include: "rules/unique_gene_sets_mtDNA.smk"
 #----------------------------------------------------------------------------------------
 # Concantenate genes for all species - de-novo sequenced + NCBI genomes
 #----------------------------------------------------------------------------------------
-# rule concatenate_CDS_cpDNA:
-# while read -r genename                                                 
-# do  
-# echo $genename
-# cat *cds/gene/${genename}.fasta > ../../concat_per_gene_cpDNA/${genename}.fasta
-# done < cpDNA_gene_set.txt
-# mkdir concantenated_cpDNA
-# # Concatenate all genes from the NCBI
-# while read -r genename                                                 
-# do  
-# echo $genename
-# cat *_${genename}.fasta >> concantenated_cpDNA/${genename}.fasta
-# done < ../cpDNA_gene_set.txt
+include: "rules/concatenate_CDS.smk"
+#----------------------------------------------------------------------------------------
+# Rename sequences
+#----------------------------------------------------------------------------------------
+include: "rules/edit_cat_fasta.smk"
 # #----------------------------------------------------------------------------------------
-# # Align
+# # Align cpDNA
 # #----------------------------------------------------------------------------------------
 # rule align_cpDNA:
-# module load bioinfo-tools MAFFT/7.407
-# ../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/aligned
-# for input_fasta in ../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/*all.edited.fasta
-# do
-# genename=$(echo $input_fasta | cut -f6 -d "/" | cut -f1 -d ".")
-# echo $genename
-# sbatch mafft_alignment.sh ${input_fasta} ../result/cpDNA_all_species/cpDNA_ncbi/concantenated_cpDNA/aligned/${genename}.aligned.fasta
-# done
+#     input:
+#         "results/cpDNA_concat/cpDNA.nameedit.done.txt"
+#     output:
+#         cpdna_aligned="results/cpDNA_aligned/aligned.done.txt"
+#     resources:
+#         threads = 4,
+#         runtime = "48h",
+#         mem_mb = 24000
+#     singularity:
+#         "containers/mafft_7.526.sif"
+#     shell:
+#         """
+#         mkdir -p results/cpDNA_aligned
+#         for gene in results/cpDNA_concat/*.fasta
+#         do
+#         prefix=$(echo $gene | cut -f3 -d "/" | cut -f1 -d ".")
+#         echo $gene $prefix
+#         mafft-linsi --thread {resources.threads} $gene > results/cpDNA_aligned/${{prefix}}.aligned.fasta
+#         done
+#         touch {output.cpdna_aligned}
+#         """
+# #----------------------------------------------------------------------------------------
+# # Align mtDNA
+# #----------------------------------------------------------------------------------------
+# rule align_mtDNA:
+#     input:
+#         "results/mtDNA_concat/mtDNA.nameedit.done.txt"
+#     output:
+#         mtdna_aligned="results/mtDNA_aligned/aligned.done.txt"
+#     resources:
+#         threads = 4,
+#         runtime = "48h",
+#         mem_mb = 24000
+#     singularity:
+#         "containers/mafft_7.526.sif"
+#     shell:
+#         """
+#         mkdir -p results/mtDNA_aligned
+#         for gene in results/mtDNA_concat/*.fasta
+#         do
+#         prefix=$(echo $gene | cut -f3 -d "/" | cut -f1 -d ".")
+#         echo $gene $prefix
+#         mafft-linsi --thread {resources.threads} $gene > results/mtDNA_aligned/${{prefix}}.aligned.fasta
+#         done
+#         touch {output.mtdna_aligned}
+#         """
 #----------------------------------------------------------------------------------------
-# Clean alignment
+# Clean per gene alignment
 #----------------------------------------------------------------------------------------
-# Make cpDNA tree
+# Build gene trees 
 #----------------------------------------------------------------------------------------
-
+# Build concatenated tree
 #----------------------------------------------------------------------------------------
-# Concatenate mtDNA scaffolds
-#----------------------------------------------------------------------------------------
-
 
 #----------------------------------------------------------------------------------------
 # Annotation of cpDNA in GeSeq
