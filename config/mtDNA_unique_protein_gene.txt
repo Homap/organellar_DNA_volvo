@@ -1,0 +1,8 @@
+GeneName
+cob
+cox1
+nad1
+nad2
+nad4
+nad5
+nad6
