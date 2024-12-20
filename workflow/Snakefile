@@ -5,7 +5,9 @@ __email__ = "homa.papoli_yazdi@biol.lu.se"
 configfile: "config/config.yaml"
 localrules: copy_all_files, ragtag_cpDNA_scaf_rename, copy_all_files_mtDNA, ragtag_mtDNA_scaf_rename, mtDNA_scaf_rename_pan_eud,\
 copy_GeneBank, extract_CDS_cpDNA, extract_CDS_mtDNA, extract_coverage_match_cpDNA, extract_coverage_match_mtDNA, plot_coverage_match, \
-process_fasta_files_cpDNA, process_fasta_files_mtDNA, find_gene_sets_cpDNA, find_gene_sets_mtDNA, concatenate_CDS, edit_cat_fasta
+process_fasta_files_cpDNA, process_fasta_files_mtDNA, find_gene_sets_cpDNA, find_gene_sets_mtDNA, concatenate_CDS, edit_cat_fasta, \
+translate_check_stopcodons_cpDNA, translate_check_stopcodons_mtDNA, align_cpDNA, align_mtDNA, clean_aligned_cpDNA, clean_aligned_mtDNA, \
+additional_cleaning, copy_aligned, add_missing_samples_cpDNA, add_missing_samples_mtDNA, concat_cpDNA_genes, concat_mtDNA_genes
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------#
@@ -25,6 +27,12 @@ design_table_mtDNA_ragtag = design_table[~design_table.Fastq_Name.isin(values_to
 fastq_name_mtDNA_ragtag = design_table_mtDNA_ragtag.Fastq_Name
 design_table_mtDNA = design_table[design_table.Fastq_Name != "S104_merged"]
 fastq_name_mtDNA = design_table_mtDNA.Fastq_Name
+
+protein_gene_table_cpDNA = pd.read_table("config/cpDNA_unique_protein_gene.txt", sep="\t")
+gene_name_cpDNA = protein_gene_table_cpDNA.GeneName
+
+protein_gene_table_mtDNA = pd.read_table("config/mtDNA_unique_protein_gene.txt", sep="\t")
+gene_name_mtDNA = protein_gene_table_mtDNA.GeneName
 
 rule all:
     input:
@@ -59,8 +67,47 @@ rule all:
         "results/mtDNA_concat/mtDNA.done.txt",
 
         "results/cpDNA_concat/cpDNA.nameedit.done.txt",
-        "results/mtDNA_concat/mtDNA.nameedit.done.txt"
+        "results/mtDNA_concat/mtDNA.nameedit.done.txt",
 
+        expand(["results/cpDNA_concat_proteinCDS/{gene_cpDNA}.translation.report.txt", 
+                "results/cpDNA_concat_proteinCDS/{gene_cpDNA}.seq.cleaned.fasta", 
+                "results/cpDNA_concat_proteinCDS/{gene_cpDNA}.seq.skipped.txt"], gene_cpDNA=gene_name_cpDNA),
+        expand(["results/mtDNA_concat_proteinCDS/{gene_mtDNA}.translation.report.txt", 
+                "results/mtDNA_concat_proteinCDS/{gene_mtDNA}.seq.cleaned.fasta", 
+                "results/mtDNA_concat_proteinCDS/{gene_mtDNA}.seq.skipped.txt"], gene_mtDNA=gene_name_mtDNA),
+
+        expand("results/cpDNA_aligned/{gene_cpDNA}.aligned.fasta", gene_cpDNA=gene_name_cpDNA),
+        expand("results/mtDNA_aligned/{gene_mtDNA}.aligned.fasta", gene_mtDNA=gene_name_mtDNA),
+
+        expand("results/cpDNA_aligned/{gene_cpDNA}.aligned.trimal.fasta", gene_cpDNA = ["atpA","atpB","atpE","atpF","atpI","pafI","petA",
+                                                                                        "psaA","psaB","psbA","psbB","psbD","psbE","psbH",
+                                                                                        "psbI","psbJ","psbM","psbT","rbcL","rpl2","rpl5",
+                                                                                        "rpl14","rpl16","rpl20","rpl23","rpl36","rps4",
+                                                                                        "rps8","rps11","rps18","tufA"]),
+        expand("results/mtDNA_aligned/{gene_mtDNA}.aligned.trimal.fasta", gene_mtDNA=gene_name_mtDNA),
+
+        "results/cpDNA_aligned/psaB.aligned.filtered.trimal.fasta",
+        "results/cpDNA_aligned/psbA.aligned.filtered.trimal.fasta",
+        "results/cpDNA_aligned/rps4.aligned.filtered.trimal.fasta",
+        "results/cpDNA_aligned/psaA.aligned.filtered.trimal.fasta",
+        "results/mtDNA_aligned/cox1.aligned.filtered.trimal.fasta",
+
+        "results/cpDNA_aligned_cleaned/copydone.txt",
+        "results/mtDNA_aligned_cleaned/copydone.txt",
+
+        expand("results/cpDNA_aligned_cleaned/{gene_cpDNA}.tocat.fasta", gene_cpDNA=["atpA", "atpB", "atpE", "atpF", "atpH", "atpI", "pafI", "pbf1", 
+                                                                                    "petA", "petB", "petD", "petG", "petL", "psaA", "psaB", "psaC", 
+                                                                                    "psaJ", "psb30", "psbA", "psbB", "psbD", "psbE", "psbF", "psbH", 
+                                                                                    "psbI", "psbJ", "psbK", "psbL", "psbM", "psbT", "psbZ", "rbcL", 
+                                                                                    "rpl14", "rpl16", "rpl20", "rpl23", "rpl2", "rpl36", "rpl5", 
+                                                                                    "rps11", "rps12", "rps14", "rps18", "rps19", "rps4", "rps7", "rps8", "tufA"]),
+        expand("results/mtDNA_aligned_cleaned/{gene_mtDNA}.tocat.fasta", gene_mtDNA=gene_name_mtDNA),
+
+        "results/cpDNA_nexus/cpDNA_concant.nex",
+        "results/cpDNA_nexus/cpDNA_partition_file.txt",
+        "results/mtDNA_nexus/mtDNA_concant.nex",
+        "results/mtDNA_nexus/mtDNA_partition_file.txt"
+        # expand("results/cpDNA_trees/{gene_cpDNA}.treefile", gene_cpDNA=gene_name_cpDNA)
         # Processed filtered fasta files for cpDNA
         # expand("results/cpDNA_CDS/{sample}_cds/gene/filtered/{genename}_filtered.fasta", genename=["atpA", "atpB"], sample= fastq_name)
 
@@ -641,111 +688,204 @@ include: "rules/concatenate_CDS.smk"
 # Rename sequences
 #----------------------------------------------------------------------------------------
 include: "rules/edit_cat_fasta.smk"
-# #----------------------------------------------------------------------------------------
-# # Align cpDNA
-# #----------------------------------------------------------------------------------------
-# rule align_cpDNA:
-#     input:
-#         "results/cpDNA_concat/cpDNA.nameedit.done.txt"
-#     output:
-#         cpdna_aligned="results/cpDNA_aligned/aligned.done.txt"
-#     resources:
-#         threads = 4,
-#         runtime = "48h",
-#         mem_mb = 24000
-#     singularity:
-#         "containers/mafft_7.526.sif"
-#     shell:
-#         """
-#         mkdir -p results/cpDNA_aligned
-#         for gene in results/cpDNA_concat/*.fasta
-#         do
-#         prefix=$(echo $gene | cut -f3 -d "/" | cut -f1 -d ".")
-#         echo $gene $prefix
-#         mafft-linsi --thread {resources.threads} $gene > results/cpDNA_aligned/${{prefix}}.aligned.fasta
-#         done
-#         touch {output.cpdna_aligned}
-#         """
-# #----------------------------------------------------------------------------------------
-# # Align mtDNA
-# #----------------------------------------------------------------------------------------
-# rule align_mtDNA:
-#     input:
-#         "results/mtDNA_concat/mtDNA.nameedit.done.txt"
-#     output:
-#         mtdna_aligned="results/mtDNA_aligned/aligned.done.txt"
-#     resources:
-#         threads = 4,
-#         runtime = "48h",
-#         mem_mb = 24000
-#     singularity:
-#         "containers/mafft_7.526.sif"
-#     shell:
-#         """
-#         mkdir -p results/mtDNA_aligned
-#         for gene in results/mtDNA_concat/*.fasta
-#         do
-#         prefix=$(echo $gene | cut -f3 -d "/" | cut -f1 -d ".")
-#         echo $gene $prefix
-#         mafft-linsi --thread {resources.threads} $gene > results/mtDNA_aligned/${{prefix}}.aligned.fasta
-#         done
-#         touch {output.mtdna_aligned}
-#         """
 #----------------------------------------------------------------------------------------
-# Clean per gene alignment
+# Transate cpDNA protein-coding genes and edit sequences if a stop codon is encountered
 #----------------------------------------------------------------------------------------
-# Build gene trees 
+rule translate_check_stopcodons_cpDNA:
+    input:
+        fasta_input="results/cpDNA_concat/{gene_cpDNA}.edited.fasta"
+    output:
+        translation="results/cpDNA_concat_proteinCDS/{gene_cpDNA}.translation.report.txt",
+        sequence="results/cpDNA_concat_proteinCDS/{gene_cpDNA}.seq.cleaned.fasta",
+        skipped="results/cpDNA_concat_proteinCDS/{gene_cpDNA}.seq.skipped.txt"
+    shell:
+        """
+        python workflow/scripts/translate_check_stopcodons.py {input.fasta_input} {output.translation} {output.sequence} {output.skipped}
+        """
+#----------------------------------------------------------------------------------------
+# Transate mtDNA protein-coding genes and edit sequences if a stop codon is encountered
+#----------------------------------------------------------------------------------------
+rule translate_check_stopcodons_mtDNA:
+    input:
+        fasta_input="results/mtDNA_concat/{gene_mtDNA}.edited.fasta"
+    output:
+        translation="results/mtDNA_concat_proteinCDS/{gene_mtDNA}.translation.report.txt",
+        sequence="results/mtDNA_concat_proteinCDS/{gene_mtDNA}.seq.cleaned.fasta",
+        skipped="results/mtDNA_concat_proteinCDS/{gene_mtDNA}.seq.skipped.txt"
+    shell:
+        """
+        python workflow/scripts/translate_check_stopcodons.py {input.fasta_input} {output.translation} {output.sequence} {output.skipped}
+        """
+#----------------------------------------------------------------------------------------
+# Align cpDNA
+#----------------------------------------------------------------------------------------
+rule align_cpDNA:
+    input:
+        sequence="results/cpDNA_concat_proteinCDS/{gene_cpDNA}.seq.cleaned.fasta"
+    output:
+        cpdna_aligned="results/cpDNA_aligned/{gene_cpDNA}.aligned.fasta"
+    singularity:
+        "containers/mafft_7.526.sif"
+    shell:
+        """
+        mafft-linsi {input.sequence} > {output.cpdna_aligned}
+        """
+#----------------------------------------------------------------------------------------
+# Align mtDNA
+#----------------------------------------------------------------------------------------
+rule align_mtDNA:
+    input:
+        sequence="results/mtDNA_concat_proteinCDS/{gene_mtDNA}.seq.cleaned.fasta"
+    output:
+        mtdna_aligned="results/mtDNA_aligned/{gene_mtDNA}.aligned.fasta"
+    singularity:
+        "containers/mafft_7.526.sif"
+    shell:
+        """
+        mafft-linsi {input.sequence} > {output.mtdna_aligned}
+        """
+#----------------------------------------------------------------------------------------
+# Clean per gene alignment for cpDNA
+#----------------------------------------------------------------------------------------
+rule clean_aligned_cpDNA:
+    input:
+        "results/cpDNA_aligned/{gene_cpDNA}.aligned.fasta"
+    output:
+        "results/cpDNA_aligned/{gene_cpDNA}.aligned.trimal.fasta"
+    shell:
+        """
+        trimal -in {input} -out {output} -automated1
+        """
+#----------------------------------------------------------------------------------------
+# Clean per gene alignment for mtDNA
+#----------------------------------------------------------------------------------------
+rule clean_aligned_mtDNA:
+    input:
+        "results/mtDNA_aligned/{gene_mtDNA}.aligned.fasta"
+    output:
+        "results/mtDNA_aligned/{gene_mtDNA}.aligned.trimal.fasta"
+    shell:
+        """
+        trimal -in {input} -out {output} -automated1
+        """
+#----------------------------------------------------------------------------------------
+# Further cleaning of alignments based on visually inspecting the trimal outputs in 
+# Aliview
+#----------------------------------------------------------------------------------------
+rule additional_cleaning:
+    input:
+        psaB="results/cpDNA_aligned/psaB.aligned.trimal.fasta",
+        psbA="results/cpDNA_aligned/psbA.aligned.trimal.fasta",
+        rps4="results/cpDNA_aligned/rps4.aligned.trimal.fasta",
+        psaA="results/cpDNA_aligned/psaA.aligned.trimal.fasta",
+        cox1="results/mtDNA_aligned/cox1.aligned.trimal.fasta"
+    output: 
+        psaB_out="results/cpDNA_aligned/psaB.aligned.filtered.trimal.fasta",
+        psbA_out="results/cpDNA_aligned/psbA.aligned.filtered.trimal.fasta",
+        rps4_out="results/cpDNA_aligned/rps4.aligned.filtered.trimal.fasta",
+        psaA_out="results/cpDNA_aligned/psaA.aligned.filtered.trimal.fasta",
+        cox1_out="results/mtDNA_aligned/cox1.aligned.filtered.trimal.fasta"
+    shell:
+        """
+        python workflow/scripts/remove_seq_from_fasta.py {input.psaB} P26503_103 > {output.psaB_out}
+        python workflow/scripts/remove_seq_from_fasta.py {input.psbA} S104_merged > {output.psbA_out}
+        python workflow/scripts/remove_seq_from_fasta.py {input.rps4} P28566_113 > {output.rps4_out} 
+        python workflow/scripts/trim_fasta.py {input.psaA} {output.psaA_out} 297
+        python workflow/scripts/truncate_fasta.py {input.cox1} {output.cox1_out} P26503_111 380 1497
+        """
+#----------------------------------------------------------------------------------------
+# Copy the cleaned alignment files
+#----------------------------------------------------------------------------------------
+include: "rules/copy_aligned.smk"
+#----------------------------------------------------------------------------------------
+# Add cpDNA sequences if not present with ---
+#----------------------------------------------------------------------------------------
+rule add_missing_samples_cpDNA:
+    input:
+        "results/cpDNA_aligned_cleaned/{gene_cpDNA}.fasta"
+    output:
+        "results/cpDNA_aligned_cleaned/{gene_cpDNA}.tocat.fasta"
+    params:
+        "config/cpDNA_align_sampled_list.txt"
+    shell:
+        """
+        python workflow/scripts/add_missing_samples.py {input} {output} {params}
+        """
+#----------------------------------------------------------------------------------------
+# Add mtDNA sequences if not present with ---
+#----------------------------------------------------------------------------------------
+rule add_missing_samples_mtDNA:
+    input:
+        "results/mtDNA_aligned_cleaned/{gene_mtDNA}.fasta"
+    output:
+        "results/mtDNA_aligned_cleaned/{gene_mtDNA}.tocat.fasta"
+    params:
+        "config/mtDNA_align_sampled_list.txt"
+    shell:
+        """
+        python workflow/scripts/add_missing_samples.py {input} {output} {params}
+        """
+#----------------------------------------------------------------------------------------
+# Concatenate alignments for cpDNA
+#----------------------------------------------------------------------------------------
+rule concat_cpDNA_genes:
+    input:
+        expand("results/cpDNA_aligned_cleaned/{gene_cpDNA}.tocat.fasta", gene_cpDNA=["atpA", "atpB", "atpE", "atpF", "atpH", "atpI", "pafI", "pbf1", 
+                                                                                    "petA", "petB", "petD", "petG", "petL", "psaA", "psaB", "psaC", 
+                                                                                    "psaJ", "psb30", "psbA", "psbB", "psbD", "psbE", "psbF", "psbH", 
+                                                                                    "psbI", "psbJ", "psbK", "psbL", "psbM", "psbT", "psbZ", "rbcL", 
+                                                                                    "rpl14", "rpl16", "rpl20", "rpl23", "rpl2", "rpl36", "rpl5", 
+                                                                                    "rps11", "rps12", "rps14", "rps18", "rps19", "rps4", "rps7", "rps8", "tufA"])
+    output:
+        nexus_align="results/cpDNA_nexus/cpDNA_concant.nex",
+        nexus_part="results/cpDNA_nexus/cpDNA_partition_file.txt"
+    conda:
+        "envs/amas.yaml"
+    shell:
+        """
+        AMAS.py concat --in-files {input} --in-format fasta --data-type dna \
+        --concat-part {output.nexus_part} --concat-out {output.nexus_align} --out-format nexus \
+        --part-format nexus
+        """
+#----------------------------------------------------------------------------------------
+# Concatenate alignments for mtDNA
+#----------------------------------------------------------------------------------------
+rule concat_mtDNA_genes:
+    input:
+        expand("results/mtDNA_aligned_cleaned/{gene_mtDNA}.tocat.fasta", gene_mtDNA=gene_name_mtDNA)
+    output:
+        nexus_align="results/mtDNA_nexus/mtDNA_concant.nex",
+        nexus_part="results/mtDNA_nexus/mtDNA_partition_file.txt"
+    conda:
+        "envs/amas.yaml"
+    shell:
+        """
+        AMAS.py concat --in-files {input} --in-format fasta --data-type dna \
+        --concat-part {output.nexus_part} --concat-out {output.nexus_align} --out-format nexus \
+        --part-format nexus
+        """
 #----------------------------------------------------------------------------------------
 # Build concatenated tree
 #----------------------------------------------------------------------------------------
-
-#----------------------------------------------------------------------------------------
-# Annotation of cpDNA in GeSeq
-#----------------------------------------------------------------------------------------
-# This step is done manually in https://chlorobox.mpimp-golm.mpg.de/geseq.html
-# Description of parameters and steps for reproducibility
-#----------------------------------------------------------------------------------------
-# Collect all annotations and change fasta header tp gene name and sample name
-# Concatenate all samples per gene
-# Concatenate all genes for genomes from the NCBI
-# Edit sequence names. Keep original sample IDs since it is easier to track.
-
-
-
-#----------------------------------------------------------------------------------------
-# Annotation of mtDNA in GeSeq
-#----------------------------------------------------------------------------------------
-# This step is done manually in https://chlorobox.mpimp-golm.mpg.de/geseq.html
-# Description of parameters and steps for reproducibility
-#----------------------------------------------------------------------------------------
-# Collect all annotations and change fasta header tp gene name and sample name
-# Concatenate all samples per gene
-# Concatenate all genes for genomes from the NCBI
-# Edit sequence names. Keep original sample IDs since it is easier to track.
-
-# ASTGUBGB	GCA_021605115
-# CHLREIGB	GCA_026108075
-# CHLSCHGB	GCA_016834595
-# EDADEBGB	GCA_001662405
-# GONPECGB	GCA_001584585
-# TETSOCGB	GCA_002891735
-# VOLAFRGB	GCA_019650175
-# VOLCARGB	GCA_000143455
-# VOLRETGB	GCA_019650235
-# EUDSPGB	GCA_003117195
-# CHLVULGB	GCA_023343905
-# DUNSALGB	GCA_002284615
-# YAMUNIGB	GCA_003116995
-# MICGLO_Lie01	S104_merged #P28566_104
-# CHLTYP_NIVA21	P29912_105 #P28566_105
-# CHLISA_Bae13	S115_merged #P28566_115
-# rule genebank_CDS:
+# rule iqtree_gene_trees_cpDNA:
 #     input:
-#         gb_cpDNA="results/geseq_cpDNA_annotation/"
+#         alignment="results/cpDNA_aligned/{gene_cpDNA}.aligned.fasta"
 #     output:
-#     conda:
-#         "envs/getorganelle.yaml"
+#         tree = "results/cpDNA_trees/{gene_cpDNA}.treefile"
+#     params:
+#         model = "MFP",  # Use ModelFinder to select the best-fit model
+#         seed = 12345    # Random seed for reproducibility
+#     resources:
+#         threads = 10,
+#         runtime = "10h",
+#         mem_mb = 60000
+#     singularity:
+#         "containers/iqtree2_2.3.6.sif"
 #     shell:
 #         """
-#         get_annotated_regions_from_gb.py 
+#         iqtree2 -s {input.alignment} \
+#                 -nt {resources.threads} \
+#                 -m {params.model} \
+#                 -pre results/cpDNA_trees/{wildcards.gene_cpDNA} \
+#                 -seed {params.seed} 
 #         """
