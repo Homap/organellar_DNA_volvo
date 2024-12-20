@@ -1,0 +1,33 @@
+executor: cluster-generic
+cluster-generic-submit-cmd:
+  mkdir -p logs/{rule} &&
+  sbatch
+    --account="naiss2024-5-46"
+    --partition="core"
+    --ntasks={resources.threads}
+    --mem={resources.mem_mb}
+    --time={resources.runtime}
+    --job-name=smk-{rule}-{wildcards}
+    --output=logs/{rule}/{rule}-{wildcards}-%j.out
+    --mail-type=FAIL
+    --mail-user=homa.papoli_yazdi@biol.lu.se
+cluster-generic-cancel-cmd: scancel
+default-resources:
+  - "slurm_partition=core"
+  - "slurm_account=naiss2024-5-46"
+  - "mem_mb=(threads*6400)"
+restart-times: 3
+max-jobs-per-second: 100
+max-status-checks-per-second: 1
+local-cores: 1
+latency-wait: 60
+jobs: 200
+keep-going: True
+rerun-incomplete: True
+rerun-triggers: mtime 
+retries: 3
+printshellcmds: True
+use-conda: True
+use-singularity: True
+remote-job-local-storage-prefix: $SNIC_TMP
+
